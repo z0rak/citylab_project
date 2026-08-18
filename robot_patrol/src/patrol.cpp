@@ -8,35 +8,36 @@ public:
   Patrol(const std::string &node_name = "patrol_node") : Node(node_name) {
     auto qos = rclcpp::QoS(10).reliability(rclcpp::ReliabilityPolicy::Reliable);
     laser_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
-        "/fastbot1/scan", 10,
+        "/fastbot_1/scan", qos,
         std::bind(&Patrol::laser_callback, this, std::placeholders::_1));
 
     cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(
-        "/fastbot_1/cmd_vel", 10);
+        "/fastbot_1/cmd_vel", qos);
 
     RCLCPP_INFO(this->get_logger(), "Patrol node started");
   }
 
 private:
-  const double front_min_angle = -M_PI / 2.0;  // -90° (right)
-  const double front_max_angle =  M_PI / 2.0;  // +90° (left)
-  void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
-{
-  for (size_t i = 0; i < msg->ranges.size(); ++i) {
-    double angle = msg->angle_min + i * msg->angle_increment;
-    // Keep only front 180°
-    if (angle < front_min_angle || angle > front_max_angle) {
-      continue;
-    }
-    double range = msg->ranges[i];
+  const double front_min_angle = -M_PI / 2.0; // -90° (right)
+  const double front_max_angle = M_PI / 2.0;  // +90° (left)
+  void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
+    front_ranges_.clear();
+    for (size_t i = 0; i < msg->ranges.size(); ++i) {
+      double angle = msg->angle_min + i * msg->angle_increment;
+      // Keep only front 180°
+      if (angle < front_min_angle || angle > front_max_angle) {
+        continue;
+      }
+      double range = msg->ranges[i];
 
-    if (range < msg->range_min || range > msg->range_max) {
-      continue;
+      if (range < msg->range_min || range > msg->range_max) {
+        continue;
+      }
+      front_ranges_.push_back(range);
     }
-    front_ranges_.push_back(range);
+    RCLCPP_INFO(this->get_logger(), "front readings: %zu",
+                front_ranges_.size());
   }
-  RCLCPP_INFO(this->get_logger(), "front readings: %zu", front_ranges_.size());
-}
 
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
