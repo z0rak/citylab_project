@@ -1,4 +1,5 @@
 #include "geometry_msgs/msg/twist.hpp"
+#include "rclcpp/callback_group.hpp"
 #include "rclcpp/qos.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
@@ -8,15 +9,17 @@ using namespace std::chrono_literals;
 class Patrol : public rclcpp::Node {
 public:
   Patrol(const std::string &node_name = "patrol_node") : Node(node_name) {
-
+    callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
     control_timer_ = this->create_wall_timer(
       std::chrono::milliseconds(100),
-      std::bind(&Patrol::control_callback, this));
+      std::bind(&Patrol::control_callback, this), callback_group_);
 
     auto qos = rclcpp::QoS(10).reliability(rclcpp::ReliabilityPolicy::Reliable);
+    rclcpp::SubscriptionOptions sub_options;
+    sub_options.callback_group = callback_group_;
     laser_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
         "/fastbot_1/scan", qos,
-        std::bind(&Patrol::laser_callback, this, std::placeholders::_1));
+        std::bind(&Patrol::laser_callback, this, std::placeholders::_1), sub_options);
 
     cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(
         "/fastbot_1/cmd_vel", qos);
@@ -51,6 +54,7 @@ private:
     RCLCPP_INFO(this->get_logger(), "100ms callback executed.");
   }
 
+  rclcpp::CallbackGroup::SharedPtr callback_group_;
   rclcpp::TimerBase::SharedPtr control_timer_;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
@@ -59,7 +63,10 @@ private:
 
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<Patrol>());
+  auto node = std::make_shared<Patrol>();
+  rclcpp::executors::MultiThreadedExecutor executor;
+  executor.add_node(node);
+  executor.spin();
   rclcpp::shutdown();
   return 0;
 }
