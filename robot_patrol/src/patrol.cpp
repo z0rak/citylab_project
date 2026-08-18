@@ -2,10 +2,17 @@
 #include "rclcpp/qos.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+#include <chrono>
+using namespace std::chrono_literals;
 
 class Patrol : public rclcpp::Node {
 public:
   Patrol(const std::string &node_name = "patrol_node") : Node(node_name) {
+
+    control_timer_ = this->create_wall_timer(
+      std::chrono::milliseconds(100),
+      std::bind(&Patrol::control_callback, this));
+
     auto qos = rclcpp::QoS(10).reliability(rclcpp::ReliabilityPolicy::Reliable);
     laser_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
         "/fastbot_1/scan", qos,
@@ -38,7 +45,13 @@ private:
     RCLCPP_INFO(this->get_logger(), "front readings: %zu",
                 front_ranges_.size());
   }
+  
+  void control_callback()
+  {
+    RCLCPP_INFO(this->get_logger(), "100ms callback executed.");
+  }
 
+  rclcpp::TimerBase::SharedPtr control_timer_;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
   std::vector<double> front_ranges_;
