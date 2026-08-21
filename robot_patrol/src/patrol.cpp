@@ -34,44 +34,54 @@ public:
 private:
   const double front_min_angle = -M_PI / 2.0; // -90° (right)
   const double front_max_angle = M_PI / 2.0;  // +90° (left)
+  const double center_threshold = 10.0 * M_PI / 180.0;  
   double max_range = 0.0;
   double best_angle = 0.0;
+  std::vector<double> front_ranges;
 
   void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
-
+    front_ranges.clear();
     bool found = false;
+    bool blocked = false;
+
     for (size_t i = 0; i < msg->ranges.size(); ++i) {
-      double angle = msg->angle_min + i * msg->angle_increment;
-      double range = msg->ranges[i];
-      // is forward blocked?
-      if (std::abs(angle) < 1.8) {
-         if (range >= 35) {
-            // there are no objects closer than 35mm, keep going forward
-            return;
-         } 
-      }
-      // Keep only front 180°
-      if (angle < front_min_angle || angle > front_max_angle) {
-        continue;
-      }
-      if (!std::isfinite(range)) {
-        continue;
-      }
-      if (range < msg->range_min || range > msg->range_max) {
-        continue;
-      }
-      if (!found || range > max_range) {
-        max_range = range;
-        best_angle = angle;
-        found = true;
-      }
+        double angle = msg->angle_min + i * msg->angle_increment;
+        double range = msg->ranges[i];
+    
+         // is forward blocked? Use a 10 degree window around center.
+       if (std::abs(angle) <= center_threshold && std::isfinite(range) && range < 0.35) {
+            blocked = true;
+        }
+        if (angle < front_min_angle || angle > front_max_angle) {
+            continue;
+        }
+        if (!std::isfinite(range)) {
+            continue;
+        }
+        if (range < msg->range_min || range > msg->range_max) {
+            continue;
+        }
+        front_ranges.push_back(range);
     }
 
-    if (found) {
-         std::lock_guard<std::mutex> lock(scan_mutex_);
-         direction_ = best_angle;
+    if (blocked) {
+        for (size_t i = 0; i < front_ranges.size(); ++i) {
+            double range = front_ranges[i];
+            double angle = msg->angle_min + i * msg->angle_increment;
+            if (!found || range > max_range) {
+                max_range = range;
+                best_angle = angle;
+                found = true;
+            }
+            if (found) {
+                std::lock_guard<std::mutex> lock(scan_mutex_);
+                direction_ = best_angle;
+            }
+        }
+    } else {
+        std::lock_guard<std::mutex> lock(scan_mutex_);
+        direction_ = 0.0;
     }
-
   }
   
   void control_callback()
