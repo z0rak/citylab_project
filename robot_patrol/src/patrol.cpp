@@ -22,11 +22,11 @@ public:
     rclcpp::SubscriptionOptions sub_options;
     sub_options.callback_group = callback_group_;
     laser_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
-        "/fastbot_1/scan", qos,
+        "/scan", qos,
         std::bind(&Patrol::laser_callback, this, std::placeholders::_1), sub_options);
 
     cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(
-        "/fastbot_1/cmd_vel", qos);
+        "/cmd_vel", qos);
 
     RCLCPP_INFO(this->get_logger(), "Patrol node started");
   }
